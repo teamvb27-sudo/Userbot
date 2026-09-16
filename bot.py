@@ -1,19 +1,5 @@
 #!/usr/bin/env python3
 # bot.py — NEXUS entry point
-# ─────────────────────────────────────────────────────────────────
-# Google Colab setup:
-#
-#   !pip install telethon motor
-#
-#   # Set env vars before running:
-#   import os
-#   os.environ["SESSION_STRING"] = "YOUR_SESSION_STRING"
-#   os.environ["MONGO_URI"]      = "mongodb+srv://user:pass@cluster.mongodb.net/db"
-#   os.environ["API_ID"]         = "37550071"
-#   os.environ["API_HASH"]       = "eca739f28db4f12737a0d418f4a77343"
-#
-#   !python bot.py
-# ─────────────────────────────────────────────────────────────────
 
 import os, asyncio, logging
 from telethon import TelegramClient
@@ -55,7 +41,11 @@ if __name__ == '__main__':
     print("  NEXUS USERBOT — Starting...")
     print("=" * 45)
     try:
-        client.start(phone=PHONE_NUMBER)
+        # Set event loop policy for Python 3.10+
+        if asyncio.sys.version_info >= (3, 10):
+            asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+        
+        asyncio.run(client.start(phone=PHONE_NUMBER))
         client.loop.run_until_complete(main())
     except KeyboardInterrupt:
         log.info("🛑 Stopped.")
