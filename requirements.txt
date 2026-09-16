@@ -1,5 +1,5 @@
 telethon==1.35.0
-cryptg==0.2.1
+cryptg==0.6.0
 pyaes==1.6.1
 rsa==4.9
 aiohttp==3.9.1
