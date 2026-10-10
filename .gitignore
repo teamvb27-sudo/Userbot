@@ -1,0 +1,6 @@
+*.log
+nexus_session.txt
+nexus_data.json
+clones/
+__pycache__/
+*.pyc
