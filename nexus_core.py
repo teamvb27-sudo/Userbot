@@ -115,6 +115,7 @@ class BotDB:
         self.ai_group_enabled = {}               # {str(chat_id): bool} — .aitg on/off, default OFF
         self.ai_chat_personality = {}            # {str(chat_id): personality} per-chat override
         self.ai_memory = {}                      # {str(chat_id): [{"role": .., "content": ..}, ...]}
+        self.ai_identity_name = ""               # fixed name the AI must give if asked "what's your name"
 
         self.start_time = datetime.now()
         self.load()
@@ -152,6 +153,7 @@ class BotDB:
             'ai_group_enabled': self.ai_group_enabled,
             'ai_chat_personality': self.ai_chat_personality,
             'ai_memory': self.ai_memory,
+            'ai_identity_name': self.ai_identity_name,
         }, indent=2))
 
 db = BotDB()
@@ -259,16 +261,33 @@ _PERSONALITY_PROMPTS = {
     ),
 }
 
+_ai_fallback_identity_name = ""  # cached owner first_name, kept for reference/logs only
+AI_DEFAULT_IDENTITY_NAME = "Bhairamdeen Kushwaha"  # used only if no .aiidentity is set
+
+def ai_resolve_identity_name() -> str:
+    """Fixed name the AI must use if asked its name — set via .aiidentity,
+    else falls back to AI_DEFAULT_IDENTITY_NAME so it's never left to the
+    model to invent one."""
+    return db.ai_identity_name.strip() or AI_DEFAULT_IDENTITY_NAME
+
 def ai_system_prompt(personality: str, is_group: bool) -> str:
+    name = ai_resolve_identity_name()
     base = (
-        "You are a real person replying to Telegram messages on someone's personal "
-        "account while they're away. Keep replies short (1-3 sentences), sound human, "
-        "and never mention that you are an AI, a bot, or a language model."
+        f"You are {name}, a real person replying to Telegram messages yourself. "
+        f"Sound human, and never mention that you are an AI, a bot, or a language model. "
+        f"CRITICAL: your name is always \"{name}\" — if anyone asks your name, who you "
+        f"are, or similar, you MUST answer with exactly this name, every single time. "
+        f"Never invent, guess, or vary this name. "
+        f"Reply length: give a proper, detailed answer — roughly 10 to 25 words, not a "
+        f"one-word or one-line reply, unless the question genuinely needs more. "
+        f"Context: you are shown the recent messages of this conversation — read them "
+        f"and reply based on what was actually said (previous messages + the latest one), "
+        f"not a generic answer that ignores what's being discussed."
     )
     tone = _PERSONALITY_PROMPTS.get(personality, _PERSONALITY_PROMPTS["adaptive"])
     scope = (
         "This is a group chat — only respond to the message you were given, stay on "
-        "topic, and keep it brief so you don't flood the chat."
+        "topic, and keep it reasonably brief so you don't flood the chat."
         if is_group else
         "This is a private one-on-one chat."
     )
@@ -445,6 +464,7 @@ async def help_cmd(event):
 `.aistatus` — AI + provider status
 `.aipersonality <mode>` — adaptive/friendly/professional/funny
 `.aimemory <10-20>` — Conversation memory limit
+`.aiidentity <Naam>` — Fixed name AI gives when asked "what's your name"
 `.aiclear` — Clear this chat's AI memory
 
 **🔹 Fun**
@@ -991,6 +1011,23 @@ async def aimemory_cmd(event):
     db.save()
     await event.reply(f"✅ **AI memory limit set to {arg} messages**")
 
+@cmd('aiidentity')
+async def aiidentity_cmd(event):
+    arg = get_args(event.message).strip()
+    if not arg:
+        return await event.reply(
+            f"AI currently answers \"what's your name\" as: **{ai_resolve_identity_name()}**\n"
+            f"Usage: `.aiidentity <Naam>` to set it, or `.aiidentity clear` to reset to your "
+            f"Telegram first name."
+        )
+    if arg.lower() == 'clear':
+        db.ai_identity_name = ""
+        db.save()
+        return await event.reply(f"✅ **AI identity reset** — ab default `{AI_DEFAULT_IDENTITY_NAME}` use hoga.")
+    db.ai_identity_name = arg
+    db.save()
+    await event.reply(f"✅ **AI identity set to `{arg}`** — ab har baar naam puchne pe yehi bolega.")
+
 @cmd('aiclear')
 async def aiclear_cmd(event):
     chat_id = str(event.chat_id)
@@ -1205,10 +1242,12 @@ async def login_only():
 
 
 async def main():
+    global _ai_fallback_identity_name
     await client.start()
     _save_string_session(client.session.save())
     me = await client.get_me()
     db.owner_id = me.id
+    _ai_fallback_identity_name = me.first_name or ""
     db.save()
     log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     log.info("🤖 NEXUS USERBOT STARTED")
