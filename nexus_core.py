@@ -61,7 +61,10 @@ MONGO_OWNER_KEY = _cfg.get("factory_owner_telegram_id", OWNER_ID)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash").strip()
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
+# llama-3.3-70b-versatile was deprecated/shut down by Groq on 16 Aug 2026 — using
+# Groq's own recommended replacement as the new default. Override with GROQ_MODEL
+# if Groq changes this again; check console.groq.com/docs/models for the current list.
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b").strip()
 
 AI_PERSONALITIES = ("adaptive", "friendly", "professional", "funny")
 AI_MEMORY_MIN, AI_MEMORY_MAX = 10, 20
@@ -342,13 +345,14 @@ async def ai_generate_reply(chat_id, system_prompt: str) -> str:
     """Gemini first, Groq backup. Bounded retries, never raises — returns
     None (and only None) if everything fails so the bot keeps running."""
     messages = ai_get_memory(chat_id)
-    last_err = None
+    gemini_err = None
+    groq_err = None
 
     for attempt in range(AI_MAX_RETRIES_PER_PROVIDER):
         try:
             return await _call_gemini(messages, system_prompt)
         except Exception as e:
-            last_err = e
+            gemini_err = e
             log.warning(f"[AI] Gemini attempt {attempt + 1} failed: {e}")
             if "no_gemini_key" in str(e):
                 break
@@ -358,13 +362,13 @@ async def ai_generate_reply(chat_id, system_prompt: str) -> str:
         try:
             return await _call_groq(messages, system_prompt)
         except Exception as e:
-            last_err = e
+            groq_err = e
             log.warning(f"[AI] Groq attempt {attempt + 1} failed: {e}")
             if "no_groq_key" in str(e):
                 break
             await asyncio.sleep(1)
 
-    log.error(f"[AI] Both providers failed for chat {chat_id}: {last_err}")
+    log.error(f"[AI] Both providers failed for chat {chat_id} — gemini: {gemini_err} | groq: {groq_err}")
     return None
 
 # ═══════════════ COMMAND DECORATOR ═══════════════
