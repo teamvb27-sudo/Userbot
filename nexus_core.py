@@ -1079,11 +1079,8 @@ async def ai_reply_handler(event):
     if event.is_group:
         if not db.ai_group_enabled.get(str(chat_id), False):
             return
-        sender = await event.get_sender()
-        if sender is None or getattr(sender, 'bot', False):
-            return  # never trigger off other bots
-        # Only reply when directly addressed, to avoid flooding the group:
-        # a reply to one of our own messages, or an @mention of us.
+        # Groups: reply ONLY when directly addressed (mention/reply-to-us),
+        # from anyone — bots included. No bot-check here on purpose.
         is_reply_to_us = False
         if event.is_reply:
             replied = await event.get_reply_message()
@@ -1091,6 +1088,11 @@ async def ai_reply_handler(event):
         me_username = (await client.get_me()).username
         is_mentioned = bool(me_username) and f"@{me_username.lower()}" in text.lower()
         if not (is_reply_to_us or is_mentioned):
+            return
+    else:
+        # DM: only real humans — skip other bots entirely.
+        sender = await event.get_sender()
+        if sender is None or getattr(sender, 'bot', False):
             return
 
     # duplicate-reply protection: never process the same message twice
